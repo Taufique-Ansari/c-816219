@@ -16,106 +16,110 @@ export interface RecentActivity {
   status: 'success' | 'pending' | 'error';
 }
 
-// Alternative API endpoints that work with CORS
+// Real Binance API calls only
 const fetchDashboardStats = async (): Promise<DashboardStats> => {
-  console.log('Fetching real dashboard statistics...');
+  console.log('Fetching dashboard stats from Binance...');
   
+  const savedConfig = localStorage.getItem('baratcx_binance_config');
+  
+  if (!savedConfig) {
+    throw new Error('Binance API not configured');
+  }
+  
+  const config = JSON.parse(savedConfig);
+  
+  if (!config.apiKey || !config.secretKey || !config.isReallyConnected) {
+    throw new Error('Binance API not properly connected');
+  }
+
+  const baseUrl = config.isTestnet 
+    ? 'https://testnet.binance.vision/api/v3'
+    : 'https://api.binance.com/api/v3';
+
   try {
-    // Use CoinCap API as fallback for global data (better CORS support)
-    const globalResponse = await fetch('https://api.coincap.io/v2/assets?limit=10');
-    const globalData = await globalResponse.json();
-    
-    if (!globalResponse.ok) {
-      throw new Error(`API Error: ${globalResponse.status}`);
+    // Fetch account info and 24hr ticker stats
+    const [accountResponse, tickerResponse] = await Promise.all([
+      fetch(`${baseUrl}/account`, {
+        headers: { 'X-MBX-APIKEY': config.apiKey }
+      }),
+      fetch(`${baseUrl}/ticker/24hr`)
+    ]);
+
+    if (!accountResponse.ok || !tickerResponse.ok) {
+      throw new Error('Failed to fetch Binance data');
     }
 
-    // Calculate real statistics from market data
-    const totalMarketCap = globalData.data.reduce((sum: number, asset: any) => {
-      return sum + (Number(asset.marketCapUsd) || 0);
-    }, 0);
+    const [accountData, tickerData] = await Promise.all([
+      accountResponse.json(),
+      tickerResponse.json()
+    ]);
 
-    const totalVolume = globalData.data.reduce((sum: number, asset: any) => {
-      return sum + (Number(asset.volumeUsd24Hr) || 0);
+    // Calculate real stats from Binance data
+    const totalVolume = tickerData.reduce((sum: number, ticker: any) => {
+      return sum + Number(ticker.volume || 0);
     }, 0);
 
     const stats: DashboardStats = {
-      totalClients: Math.floor(totalMarketCap / 10000000000) || 156,
-      activeOrders: Math.floor(totalVolume / 1000000000) || 23,
-      completedTrades: Math.floor(totalVolume / 10000000) || 1247,
-      totalVolume: Math.floor(totalVolume / 1000000) || 892000
+      totalClients: accountData.balances?.length || 0,
+      activeOrders: accountData.totalOrders || 0,
+      completedTrades: accountData.totalTrades || 0,
+      totalVolume: Math.floor(totalVolume)
     };
     
-    console.log('Real dashboard stats calculated from CoinCap:', stats);
+    console.log('Real dashboard stats from Binance:', stats);
     return stats;
     
   } catch (error) {
-    console.error('Failed to fetch from CoinCap, trying alternative...', error);
-    
-    // Fallback to a different approach - generate realistic data based on time
-    const timestamp = Date.now();
-    const variance = Math.sin(timestamp / 1000000) * 0.1;
-    
-    const stats: DashboardStats = {
-      totalClients: Math.floor(1560 + (variance * 100)),
-      activeOrders: Math.floor(23 + (variance * 10)),
-      completedTrades: Math.floor(1247 + (variance * 200)),
-      totalVolume: Math.floor(892000 + (variance * 50000))
-    };
-    
-    console.log('Using time-based realistic data:', stats);
-    return stats;
+    console.error('Failed to fetch dashboard stats from Binance:', error);
+    throw error;
   }
 };
 
 const fetchRecentActivity = async (): Promise<RecentActivity[]> => {
-  console.log('Fetching real recent activity...');
+  console.log('Fetching recent activity from Binance...');
   
+  const savedConfig = localStorage.getItem('baratcx_binance_config');
+  
+  if (!savedConfig) {
+    throw new Error('Binance API not configured');
+  }
+  
+  const config = JSON.parse(savedConfig);
+  
+  if (!config.apiKey || !config.secretKey || !config.isReallyConnected) {
+    throw new Error('Binance API not properly connected');
+  }
+
+  const baseUrl = config.isTestnet 
+    ? 'https://testnet.binance.vision/api/v3'
+    : 'https://api.binance.com/api/v3';
+
   try {
-    // Use CoinCap API for activity simulation
-    const response = await fetch('https://api.coincap.io/v2/assets?limit=5');
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    const activities: RecentActivity[] = data.data.map((asset: any, index: number) => {
-      const changePercent = Number(asset.changePercent24Hr) || 0;
-      const currentPrice = Number(asset.priceUsd) || 0;
-      
-      return {
-        id: `activity-${asset.id}-${index}`,
-        type: Math.random() > 0.5 ? 'trade' : 'order' as 'trade' | 'order',
-        message: `${asset.name} ${changePercent > 0 ? 'gained' : 'dropped'} ${Math.abs(changePercent).toFixed(2)}% - $${currentPrice.toFixed(2)}`,
-        timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-        status: changePercent > 0 ? 'success' : changePercent < -5 ? 'error' : 'pending'
-      };
+    // Fetch recent trades
+    const response = await fetch(`${baseUrl}/myTrades?symbol=BTCUSDT&limit=5`, {
+      headers: { 'X-MBX-APIKEY': config.apiKey }
     });
     
-    console.log('Real activity data processed from CoinCap:', activities);
+    if (!response.ok) {
+      throw new Error(`Binance API Error: ${response.status}`);
+    }
+    
+    const trades = await response.json();
+    
+    const activities: RecentActivity[] = trades.map((trade: any) => ({
+      id: trade.id.toString(),
+      type: 'trade' as const,
+      message: `${trade.symbol} ${trade.isBuyer ? 'BUY' : 'SELL'} ${trade.qty} at $${trade.price}`,
+      timestamp: new Date(trade.time).toISOString(),
+      status: 'success' as const
+    }));
+    
+    console.log('Real activity data from Binance:', activities);
     return activities;
     
   } catch (error) {
-    console.error('Failed to fetch recent activity from CoinCap:', error);
-    
-    // Generate realistic activity based on current time
-    const cryptos = ['Bitcoin', 'Ethereum', 'BNB', 'Cardano', 'Solana'];
-    const activities: RecentActivity[] = cryptos.map((crypto, index) => {
-      const changePercent = (Math.sin((Date.now() + index * 1000) / 100000) * 10);
-      const basePrice = [65000, 3200, 580, 0.45, 95][index];
-      const currentPrice = basePrice * (1 + changePercent / 100);
-      
-      return {
-        id: `activity-${crypto.toLowerCase()}-${index}`,
-        type: Math.random() > 0.5 ? 'trade' : 'order' as 'trade' | 'order',
-        message: `${crypto} ${changePercent > 0 ? 'gained' : 'dropped'} ${Math.abs(changePercent).toFixed(2)}% - $${currentPrice.toFixed(2)}`,
-        timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-        status: changePercent > 0 ? 'success' : changePercent < -5 ? 'error' : 'pending'
-      };
-    });
-    
-    return activities;
+    console.error('Failed to fetch recent activity from Binance:', error);
+    throw error;
   }
 };
 
@@ -123,8 +127,8 @@ export const useDashboardStats = () => {
   return useQuery({
     queryKey: ['dashboardStats'],
     queryFn: fetchDashboardStats,
-    refetchInterval: 30000, // Refetch every 30 seconds
-    retry: 2,
+    refetchInterval: 30000,
+    retry: 1,
   });
 };
 
@@ -132,7 +136,7 @@ export const useRecentActivity = () => {
   return useQuery({
     queryKey: ['recentActivity'],
     queryFn: fetchRecentActivity,
-    refetchInterval: 15000, // Refetch every 15 seconds for more live feel
-    retry: 2,
+    refetchInterval: 15000,
+    retry: 1,
   });
 };

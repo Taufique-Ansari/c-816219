@@ -45,12 +45,20 @@ const BinanceAPI = () => {
     setConnectionStatus('connecting');
     
     try {
-      // Test with a real API endpoint that doesn't require authentication
-      const testUrl = config.isTestnet 
-        ? 'https://testnet.binance.vision/api/v3/exchangeInfo'
-        : 'https://api.binance.com/api/v3/exchangeInfo';
+      if (!config.apiKey || !config.secretKey) {
+        throw new Error('API credentials required');
+      }
+
+      // Test actual Binance API endpoint that requires authentication
+      const baseUrl = config.isTestnet 
+        ? 'https://testnet.binance.vision/api/v3'
+        : 'https://api.binance.com/api/v3';
       
-      const response = await fetch(testUrl);
+      const response = await fetch(`${baseUrl}/account`, {
+        headers: {
+          'X-MBX-APIKEY': config.apiKey
+        }
+      });
       
       if (response.ok) {
         setConnectionStatus('connected');
@@ -59,22 +67,22 @@ const BinanceAPI = () => {
         localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
         
         toast({
-          title: "Real Connection Successful",
-          description: `Successfully connected to Binance ${config.isTestnet ? 'Testnet' : 'Live'} API`,
+          title: "Real Binance Connection Successful",
+          description: `Successfully connected to Binance ${config.isTestnet ? 'Testnet' : 'Live'} API with your credentials`,
         });
       } else {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status} - Check your API credentials`);
       }
     } catch (error) {
-      console.error('Real connection test failed:', error);
+      console.error('Real Binance connection test failed:', error);
       setConnectionStatus('error');
       const updatedConfig = { ...config, isReallyConnected: false };
       setConfig(updatedConfig);
       localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
       
       toast({
-        title: "Connection Failed",
-        description: "Unable to connect to Binance API. Please check your network connection.",
+        title: "Binance Connection Failed",
+        description: "Unable to authenticate with Binance API. Please check your credentials.",
         variant: "destructive"
       });
     } finally {
@@ -252,7 +260,7 @@ const BinanceAPI = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Connection Status & Info
+              Real Connection Status
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -261,9 +269,9 @@ const BinanceAPI = () => {
                 <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-medium text-green-800">API Connected Successfully</p>
+                    <p className="font-medium text-green-800">Connected to Real Binance API</p>
                     <p className="text-green-700">
-                      Your API is working and orders will show real-time data from Binance {config.isTestnet ? 'Testnet' : 'Live Trading'}.
+                      Your app is now using live data from Binance {config.isTestnet ? 'Testnet' : 'Live Trading'} API.
                     </p>
                   </div>
                 </div>
@@ -271,9 +279,9 @@ const BinanceAPI = () => {
                 <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                   <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-medium text-red-800">Connection Failed</p>
+                    <p className="font-medium text-red-800">Binance API Connection Failed</p>
                     <p className="text-red-700">
-                      Unable to connect to Binance API. The app will use simulated data based on real market prices.
+                      Check your API credentials and ensure they have proper permissions.
                     </p>
                   </div>
                 </div>
@@ -281,20 +289,20 @@ const BinanceAPI = () => {
                 <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-medium text-yellow-800">Using Simulated Data</p>
+                    <p className="font-medium text-yellow-800">Not Connected to Binance</p>
                     <p className="text-yellow-700">
-                      Configure and test your API connection to get real trading data. Currently showing realistic market-based simulations.
+                      Configure your API credentials and test connection to use real Binance data.
                     </p>
                   </div>
                 </div>
               )}
 
               <div className="space-y-3">
-                <h4 className="font-medium">Current Status:</h4>
+                <h4 className="font-medium">Current Data Source:</h4>
                 <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li>• Market Data: Real-time from CoinCap API</li>
-                  <li>• Orders: {config.isReallyConnected ? 'Live Binance Data' : 'Market-based Simulation'}</li>
-                  <li>• Updates: Every 15-30 seconds</li>
+                  <li>• Orders: {config.isReallyConnected ? 'Live Binance API' : 'Not Available'}</li>
+                  <li>• Account Data: {config.isReallyConnected ? 'Live Binance API' : 'Not Available'}</li>
+                  <li>• Trading Activity: {config.isReallyConnected ? 'Live Binance API' : 'Not Available'}</li>
                   <li>• Network: {config.isTestnet ? 'Testnet' : 'Live Trading'}</li>
                 </ul>
               </div>

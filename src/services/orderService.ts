@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 
 export interface Order {
@@ -15,86 +14,62 @@ export interface Order {
   updatedAt: string;
 }
 
-// Real-time order simulation based on actual market data
+// Real Binance API calls only
 const fetchOrdersFromAPI = async (): Promise<Order[]> => {
-  console.log('Fetching real-time orders...');
+  console.log('Fetching orders from Binance API...');
   
   // Check for Binance API configuration
   const savedConfig = localStorage.getItem('baratcx_binance_config');
-  let isConnectedToBinance = false;
   
-  if (savedConfig) {
-    const config = JSON.parse(savedConfig);
-    isConnectedToBinance = !!(config.apiKey && config.secretKey);
+  if (!savedConfig) {
+    throw new Error('Binance API not configured');
+  }
+  
+  const config = JSON.parse(savedConfig);
+  
+  if (!config.apiKey || !config.secretKey || !config.isReallyConnected) {
+    throw new Error('Binance API not properly connected');
   }
 
-  try {
-    // Fetch real market data to generate realistic orders
-    const response = await fetch('https://api.coincap.io/v2/assets?limit=10');
-    
-    if (!response.ok) {
-      throw new Error(`Market API Error: ${response.status}`);
-    }
+  const baseUrl = config.isTestnet 
+    ? 'https://testnet.binance.vision/api/v3'
+    : 'https://api.binance.com/api/v3';
 
-    const marketData = await response.json();
-    
-    // Generate realistic orders based on real market data
-    const orders: Order[] = marketData.data.slice(0, 5).map((asset: any, index: number) => {
-      const currentPrice = Number(asset.priceUsd) || 1000;
-      const changePercent = Number(asset.changePercent24Hr) || 0;
-      
-      // Create realistic trading scenarios
-      const quantity = Math.random() * 10 + 0.1;
-      const priceVariation = currentPrice * (1 + (Math.random() - 0.5) * 0.02);
-      
-      return {
-        id: `ORDER-${asset.symbol}-${Date.now()}-${index}`,
-        clientId: `CLIENT-${index + 1}`,
-        symbol: `${asset.symbol}USDT`,
-        side: Math.random() > 0.5 ? 'BUY' : 'SELL' as 'BUY' | 'SELL',
-        type: 'LIMIT',
-        quantity: Number(quantity.toFixed(4)),
-        price: Number(priceVariation.toFixed(2)),
-        status: ['NEW', 'PARTIALLY_FILLED', 'FILLED'][Math.floor(Math.random() * 3)] as any,
-        assignedTo: Math.random() > 0.7 ? 'John Doe' : undefined,
-        createdAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+  try {
+    // Fetch real orders from Binance
+    const response = await fetch(`${baseUrl}/openOrders`, {
+      headers: {
+        'X-MBX-APIKEY': config.apiKey
+      }
     });
 
-    // Add a note about connection status
-    console.log(`Generated ${orders.length} realistic orders based on live market data. Binance connected: ${isConnectedToBinance}`);
+    if (!response.ok) {
+      throw new Error(`Binance API Error: ${response.status}`);
+    }
+
+    const binanceOrders = await response.json();
+    
+    // Convert Binance orders to our format
+    const orders: Order[] = binanceOrders.map((order: any) => ({
+      id: order.orderId.toString(),
+      clientId: order.clientOrderId || `CLIENT-${Date.now()}`,
+      symbol: order.symbol,
+      side: order.side as 'BUY' | 'SELL',
+      type: order.type,
+      quantity: Number(order.origQty),
+      price: Number(order.price),
+      status: order.status as any,
+      assignedTo: undefined,
+      createdAt: new Date(order.time).toISOString(),
+      updatedAt: new Date(order.updateTime).toISOString()
+    }));
+
+    console.log(`Fetched ${orders.length} real orders from Binance`);
     return orders;
 
   } catch (error) {
-    console.error('Failed to fetch market data for orders:', error);
-    
-    // Generate time-based realistic orders as fallback
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT'];
-    const basePrices = [65000, 3200, 580, 0.45, 95];
-    
-    const orders: Order[] = symbols.map((symbol, index) => {
-      const basePrice = basePrices[index];
-      const timeVariation = Math.sin((Date.now() + index * 1000) / 100000) * 0.1;
-      const currentPrice = basePrice * (1 + timeVariation);
-      
-      return {
-        id: `ORDER-${symbol}-${Date.now()}-${index}`,
-        clientId: `CLIENT-${index + 1}`,
-        symbol: symbol,
-        side: Math.random() > 0.5 ? 'BUY' : 'SELL' as 'BUY' | 'SELL',
-        type: 'LIMIT',
-        quantity: Number((Math.random() * 10 + 0.1).toFixed(4)),
-        price: Number(currentPrice.toFixed(2)),
-        status: ['NEW', 'PARTIALLY_FILLED', 'FILLED'][Math.floor(Math.random() * 3)] as any,
-        assignedTo: Math.random() > 0.7 ? 'John Doe' : undefined,
-        createdAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-    });
-
-    console.log('Using time-based realistic order data as fallback');
-    return orders;
+    console.error('Failed to fetch orders from Binance:', error);
+    throw error;
   }
 };
 
@@ -102,7 +77,7 @@ export const useOrders = () => {
   return useQuery({
     queryKey: ['orders'],
     queryFn: fetchOrdersFromAPI,
-    refetchInterval: 20000, // Refetch every 20 seconds
+    refetchInterval: 10000, // Refetch every 10 seconds
     retry: 1,
   });
 };
