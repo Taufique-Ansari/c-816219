@@ -3,19 +3,25 @@ import { ArrowUpIcon, ArrowDownIcon, TrendingUpIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 const fetchGlobalMarketData = async () => {
+  console.log('Fetching global market data from CoinGecko...');
   const response = await fetch('https://api.coingecko.com/api/v3/global');
   if (!response.ok) {
+    console.error('Failed to fetch global market data:', response.status, response.statusText);
     throw new Error('Network response was not ok');
   }
-  return response.json();
+  const data = await response.json();
+  console.log('Global market data fetched successfully:', data);
+  return data;
 };
 
 const MarketStats = () => {
-  const { data: globalData, isLoading } = useQuery({
+  const { data: globalData, isLoading, error } = useQuery({
     queryKey: ['globalMarketData'],
     queryFn: fetchGlobalMarketData,
     refetchInterval: 60000, // Refetch every minute
   });
+
+  console.log('MarketStats render - isLoading:', isLoading, 'error:', error, 'data:', globalData);
 
   if (isLoading) {
     return (
@@ -27,6 +33,18 @@ const MarketStats = () => {
             <div className="h-4 bg-muted rounded w-16"></div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    console.error('Error in MarketStats:', error);
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="glass-card p-6 rounded-lg bg-red-50 border-red-200">
+          <p className="text-red-600">Failed to load market data</p>
+          <p className="text-sm text-red-500">{error.message}</p>
+        </div>
       </div>
     );
   }
