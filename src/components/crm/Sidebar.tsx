@@ -9,8 +9,10 @@ import {
   Users, 
   User, 
   Key, 
-  LogOut 
+  LogOut,
+  TrendingUp
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
   activeSection: string;
@@ -19,9 +21,10 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'CRM Dashboard', icon: LayoutDashboard },
     { id: 'orders', label: 'Order Management', icon: ShoppingCart },
     { id: 'profile', label: 'Profile Management', icon: User },
     ...(user?.role === 'admin' ? [
@@ -29,6 +32,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => 
       { id: 'binance', label: 'Binance API', icon: Key }
     ] : [])
   ];
+
+  const handleCryptoDashboard = () => {
+    navigate('/crypto-dashboard');
+  };
 
   return (
     <div className="w-64 bg-secondary h-screen flex flex-col">
@@ -40,6 +47,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => 
       </div>
       
       <nav className="flex-1 p-4 space-y-2">
+        <Button
+          variant="ghost"
+          className="w-full justify-start mb-4 border border-primary/20"
+          onClick={handleCryptoDashboard}
+        >
+          <TrendingUp className="mr-2 h-4 w-4" />
+          Crypto Dashboard
+        </Button>
+        
         {menuItems.map((item) => (
           <Button
             key={item.id}
