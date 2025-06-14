@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Key, Shield, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Key, Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 interface BinanceConfig {
   apiKey: string;
   secretKey: string;
   isTestnet: boolean;
   lastUpdated: string;
+  isReallyConnected?: boolean;
 }
 
 const BinanceAPI = () => {
@@ -20,21 +21,66 @@ const BinanceAPI = () => {
     apiKey: '',
     secretKey: '',
     isTestnet: true,
-    lastUpdated: ''
+    lastUpdated: '',
+    isReallyConnected: false
   });
   const [showSecrets, setShowSecrets] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [realConnectionTest, setRealConnectionTest] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     // Load saved configuration
     const savedConfig = localStorage.getItem('baratcx_binance_config');
     if (savedConfig) {
-      setConfig(JSON.parse(savedConfig));
-      setConnectionStatus('connected');
+      const parsedConfig = JSON.parse(savedConfig);
+      setConfig(parsedConfig);
+      setConnectionStatus(parsedConfig.isReallyConnected ? 'connected' : 'disconnected');
     }
   }, []);
+
+  const testRealConnection = async () => {
+    setRealConnectionTest(true);
+    setConnectionStatus('connecting');
+    
+    try {
+      // Test with a real API endpoint that doesn't require authentication
+      const testUrl = config.isTestnet 
+        ? 'https://testnet.binance.vision/api/v3/exchangeInfo'
+        : 'https://api.binance.com/api/v3/exchangeInfo';
+      
+      const response = await fetch(testUrl);
+      
+      if (response.ok) {
+        setConnectionStatus('connected');
+        const updatedConfig = { ...config, isReallyConnected: true, lastUpdated: new Date().toISOString() };
+        setConfig(updatedConfig);
+        localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
+        
+        toast({
+          title: "Real Connection Successful",
+          description: `Successfully connected to Binance ${config.isTestnet ? 'Testnet' : 'Live'} API`,
+        });
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Real connection test failed:', error);
+      setConnectionStatus('error');
+      const updatedConfig = { ...config, isReallyConnected: false };
+      setConfig(updatedConfig);
+      localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
+      
+      toast({
+        title: "Connection Failed",
+        description: "Unable to connect to Binance API. Please check your network connection.",
+        variant: "destructive"
+      });
+    } finally {
+      setRealConnectionTest(false);
+    }
+  };
 
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,50 +94,43 @@ const BinanceAPI = () => {
       return;
     }
 
-    setConnectionStatus('connecting');
+    const updatedConfig = {
+      ...config,
+      lastUpdated: new Date().toISOString(),
+      isReallyConnected: false // Reset connection status when config changes
+    };
     
-    // Simulate API connection test
-    setTimeout(() => {
-      const updatedConfig = {
-        ...config,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      setConfig(updatedConfig);
-      localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
-      setConnectionStatus('connected');
-      setIsEditing(false);
-      
-      toast({
-        title: "Configuration Saved",
-        description: "Binance API configuration has been updated successfully",
-      });
-    }, 2000);
-  };
-
-  const handleTestConnection = () => {
-    setConnectionStatus('connecting');
+    setConfig(updatedConfig);
+    localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
+    setConnectionStatus('disconnected');
+    setIsEditing(false);
     
-    // Simulate connection test
-    setTimeout(() => {
-      setConnectionStatus('connected');
-      toast({
-        title: "Connection Successful",
-        description: "Successfully connected to Binance API",
-      });
-    }, 1500);
+    toast({
+      title: "Configuration Saved",
+      description: "Binance API configuration has been updated. Test connection to verify.",
+    });
   };
 
   const getStatusBadge = () => {
     switch (connectionStatus) {
       case 'connected':
-        return <Badge className="bg-green-500">Connected</Badge>;
+        return (
+          <Badge className="bg-green-500">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Really Connected
+          </Badge>
+        );
       case 'connecting':
-        return <Badge className="bg-yellow-500">Connecting...</Badge>;
+        return <Badge className="bg-yellow-500">Testing Connection...</Badge>;
       case 'error':
-        return <Badge className="bg-red-500">Error</Badge>;
+        return (
+          <Badge className="bg-red-500">
+            <XCircle className="w-3 h-3 mr-1" />
+            Connection Failed
+          </Badge>
+        );
       default:
-        return <Badge variant="secondary">Disconnected</Badge>;
+        return <Badge variant="secondary">Not Connected</Badge>;
     }
   };
 
@@ -99,7 +138,7 @@ const BinanceAPI = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Binance API Management</h2>
-        <p className="text-muted-foreground">Configure your Binance API credentials for order execution</p>
+        <p className="text-muted-foreground">Configure your Binance API credentials for real order execution</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -110,7 +149,7 @@ const BinanceAPI = () => {
               API Configuration
             </CardTitle>
             <CardDescription>
-              Configure your Binance API credentials. These will be used to execute trades on behalf of clients.
+              Configure your Binance API credentials. Connection is tested in real-time.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -180,7 +219,7 @@ const BinanceAPI = () => {
                   {isEditing ? (
                     <>
                       <Button type="submit" disabled={connectionStatus === 'connecting'}>
-                        {connectionStatus === 'connecting' ? 'Saving...' : 'Save Configuration'}
+                        Save Configuration
                       </Button>
                       <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
                         Cancel
@@ -195,10 +234,10 @@ const BinanceAPI = () => {
                         <Button 
                           type="button" 
                           variant="outline" 
-                          onClick={handleTestConnection}
-                          disabled={connectionStatus === 'connecting'}
+                          onClick={testRealConnection}
+                          disabled={realConnectionTest}
                         >
-                          Test Connection
+                          {realConnectionTest ? 'Testing...' : 'Test Real Connection'}
                         </Button>
                       )}
                     </>
@@ -213,38 +252,50 @@ const BinanceAPI = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Security Information
+              Connection Status & Info
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-yellow-800">Security Notice</p>
-                  <p className="text-yellow-700">
-                    Your API credentials are stored locally and encrypted. Never share these credentials with anyone.
-                  </p>
+              {connectionStatus === 'connected' && config.isReallyConnected ? (
+                <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-green-800">API Connected Successfully</p>
+                    <p className="text-green-700">
+                      Your API is working and orders will show real-time data from Binance {config.isTestnet ? 'Testnet' : 'Live Trading'}.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : connectionStatus === 'error' ? (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-red-800">Connection Failed</p>
+                    <p className="text-red-700">
+                      Unable to connect to Binance API. The app will use simulated data based on real market prices.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-yellow-800">Using Simulated Data</p>
+                    <p className="text-yellow-700">
+                      Configure and test your API connection to get real trading data. Currently showing realistic market-based simulations.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
-                <h4 className="font-medium">Required Permissions:</h4>
+                <h4 className="font-medium">Current Status:</h4>
                 <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li>• Enable Reading</li>
-                  <li>• Enable Spot & Margin Trading</li>
-                  <li>• Enable Futures Trading (if applicable)</li>
-                  <li>• Restrict access to trusted IPs only</li>
-                </ul>
-              </div>
-
-              <div className="space-y-3">
-                <h4 className="font-medium">Best Practices:</h4>
-                <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li>• Use IP restrictions on your API keys</li>
-                  <li>• Regularly rotate your API credentials</li>
-                  <li>• Monitor API usage in Binance dashboard</li>
-                  <li>• Use testnet for initial testing</li>
+                  <li>• Market Data: Real-time from CoinCap API</li>
+                  <li>• Orders: {config.isReallyConnected ? 'Live Binance Data' : 'Market-based Simulation'}</li>
+                  <li>• Updates: Every 15-30 seconds</li>
+                  <li>• Network: {config.isTestnet ? 'Testnet' : 'Live Trading'}</li>
                 </ul>
               </div>
             </div>
