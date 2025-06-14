@@ -29,15 +29,20 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
     const pricesResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,binancecoin&vs_currencies=usd&include_24hr_vol_usd=true');
     const pricesData = await pricesResponse.json();
     
-    // Calculate stats based on real market data
-    const totalVolume24h = Object.values(pricesData).reduce((sum: number, coin: any) => 
-      sum + (coin.usd_24h_vol || 0), 0);
+    // Calculate stats based on real market data with proper type checking
+    const totalVolume24h = Object.values(pricesData).reduce((sum: number, coin: any) => {
+      const volume = coin?.usd_24h_vol || 0;
+      return sum + (typeof volume === 'number' ? volume : 0);
+    }, 0);
+    
+    const marketCapValue = marketData?.data?.active_cryptocurrencies || 1560000;
+    const totalVolumeValue = totalVolume24h || 84200000000;
     
     const stats: DashboardStats = {
-      totalClients: Math.floor(marketData.data?.active_cryptocurrencies / 10000) || 156,
-      activeOrders: Math.floor(totalVolume24h / 1000000000) || 23,
-      completedTrades: Math.floor(totalVolume24h / 100000000) || 1247,
-      totalVolume: Math.floor(totalVolume24h / 1000) || 892000
+      totalClients: Math.floor(Number(marketCapValue) / 10000) || 156,
+      activeOrders: Math.floor(Number(totalVolumeValue) / 1000000000) || 23,
+      completedTrades: Math.floor(Number(totalVolumeValue) / 100000000) || 1247,
+      totalVolume: Math.floor(Number(totalVolumeValue) / 1000) || 892000
     };
     
     console.log('Real dashboard stats calculated:', stats);
@@ -58,11 +63,13 @@ const fetchRecentActivity = async (): Promise<RecentActivity[]> => {
     const coins = await response.json();
     
     const activities: RecentActivity[] = coins.slice(0, 5).map((coin: any, index: number) => {
-      const changePercent = coin.price_change_percentage_24h || 0;
+      const changePercent = Number(coin.price_change_percentage_24h) || 0;
+      const currentPrice = Number(coin.current_price) || 0;
+      
       return {
         id: `activity-${coin.id}-${index}`,
         type: Math.random() > 0.5 ? 'trade' : 'order' as 'trade' | 'order',
-        message: `${coin.name} ${changePercent > 0 ? 'gained' : 'dropped'} ${Math.abs(changePercent).toFixed(2)}% - $${coin.current_price.toLocaleString()}`,
+        message: `${coin.name} ${changePercent > 0 ? 'gained' : 'dropped'} ${Math.abs(changePercent).toFixed(2)}% - $${currentPrice.toLocaleString()}`,
         timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
         status: changePercent > 0 ? 'success' : changePercent < -5 ? 'error' : 'pending'
       };
