@@ -1,353 +1,185 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Key, Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-
-interface BinanceConfig {
-  apiKey: string;
-  secretKey: string;
-  isTestnet: boolean;
-  lastUpdated: string;
-  isReallyConnected?: boolean;
-}
+import { CheckCircle, XCircle, AlertCircle, Settings } from 'lucide-react';
 
 const BinanceAPI = () => {
-  const [config, setConfig] = useState<BinanceConfig>({
-    apiKey: '',
-    secretKey: '',
-    isTestnet: true,
-    lastUpdated: '',
-    isReallyConnected: false
-  });
-  const [showSecrets, setShowSecrets] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-  const [realConnectionTest, setRealConnectionTest] = useState(false);
-  const { toast } = useToast();
+  const [isConnected, setIsConnected] = useState(false);
+  const [isTestnet, setIsTestnet] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    // Load saved configuration
-    const savedConfig = localStorage.getItem('baratcx_binance_config');
-    if (savedConfig) {
-      const parsedConfig = JSON.parse(savedConfig);
-      setConfig(parsedConfig);
-      setConnectionStatus(parsedConfig.isReallyConnected ? 'connected' : 'disconnected');
-    }
-  }, []);
-
-  const testRealConnection = async () => {
-    setRealConnectionTest(true);
-    setConnectionStatus('connecting');
+  const testConnection = async () => {
+    setConnectionStatus('testing');
+    setErrorMessage('');
     
     try {
-      if (!config.apiKey || !config.secretKey) {
-        throw new Error('API credentials required');
-      }
-
-      const baseUrl = config.isTestnet 
-        ? 'https://testnet.binance.vision/api/v3'
-        : 'https://api.binance.com/api/v3';
+      console.log('Testing Binance connection via Edge Function...');
       
-      // Use CORS proxy for testing connection
-      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-      const response = await fetch(`${proxyUrl}${baseUrl}/account`, {
+      const response = await fetch('/functions/v1/binance-api', {
+        method: 'POST',
         headers: {
-          'X-MBX-APIKEY': config.apiKey,
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          endpoint: '/account',
+          params: {}
+        })
       });
-      
-      if (response.ok) {
-        setConnectionStatus('connected');
-        const updatedConfig = { ...config, isReallyConnected: true, lastUpdated: new Date().toISOString() };
-        setConfig(updatedConfig);
-        localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
-        
-        toast({
-          title: "Real Binance Connection Successful",
-          description: `Successfully connected to Binance ${config.isTestnet ? 'Testnet' : 'Live'} API. The app is now using real data.`,
-        });
-      } else {
-        throw new Error(`HTTP ${response.status} - Check your API credentials`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Connection failed');
       }
-    } catch (error) {
-      console.error('Real Binance connection test failed:', error);
-      setConnectionStatus('error');
-      const updatedConfig = { ...config, isReallyConnected: false };
-      setConfig(updatedConfig);
-      localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
+
+      const data = await response.json();
+      console.log('Binance connection successful via Edge Function:', data);
       
-      toast({
-        title: "Binance Connection Failed",
-        description: "Unable to authenticate with Binance API. For CORS issues, you may need to enable the demo server at https://cors-anywhere.herokuapp.com/corsdemo",
-        variant: "destructive"
-      });
-    } finally {
-      setRealConnectionTest(false);
+      setIsConnected(true);
+      setConnectionStatus('success');
+      
+    } catch (error: any) {
+      console.error('Binance connection test failed:', error);
+      setIsConnected(false);
+      setConnectionStatus('error');
+      setErrorMessage(error.message || 'Connection failed');
     }
   };
 
-  const handleSaveConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!config.apiKey || !config.secretKey) {
-      toast({
-        title: "Error",
-        description: "Please provide both API Key and Secret Key",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const updatedConfig = {
-      ...config,
-      lastUpdated: new Date().toISOString(),
-      isReallyConnected: false // Reset connection status when config changes
-    };
-    
-    setConfig(updatedConfig);
-    localStorage.setItem('baratcx_binance_config', JSON.stringify(updatedConfig));
-    setConnectionStatus('disconnected');
-    setIsEditing(false);
-    
-    toast({
-      title: "Configuration Saved",
-      description: "Binance API configuration has been updated. Test connection to verify.",
-    });
-  };
-
-  const getStatusBadge = () => {
+  const getStatusIcon = () => {
     switch (connectionStatus) {
-      case 'connected':
-        return (
-          <Badge className="bg-green-500">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Really Connected
-          </Badge>
-        );
-      case 'connecting':
-        return <Badge className="bg-yellow-500">Testing Connection...</Badge>;
+      case 'testing':
+        return <AlertCircle className="h-4 w-4 text-yellow-500 animate-pulse" />;
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'error':
-        return (
-          <Badge className="bg-red-500">
-            <XCircle className="w-3 h-3 mr-1" />
-            Connection Failed
-          </Badge>
-        );
+        return <XCircle className="h-4 w-4 text-red-500" />;
       default:
-        return <Badge variant="secondary">Not Connected</Badge>;
+        return <Settings className="h-4 w-4 text-gray-400" />;
+    }
+  };
+
+  const getStatusText = () => {
+    switch (connectionStatus) {
+      case 'testing':
+        return 'Testing connection...';
+      case 'success':
+        return 'Connected successfully';
+      case 'error':
+        return 'Connection failed';
+      default:
+        return 'Not connected';
     }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Binance API Management</h2>
-        <p className="text-muted-foreground">Configure your Binance API credentials for real order execution</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              API Configuration
-            </CardTitle>
-            <CardDescription>
-              Configure your Binance API credentials. Connection is tested in real-time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Connection Status:</span>
-                {getStatusBadge()}
-              </div>
-              
-              {config.lastUpdated && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Last Updated:</span>
-                  <span className="text-sm text-muted-foreground">
-                    {new Date(config.lastUpdated).toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              <form onSubmit={handleSaveConfig} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="apiKey">API Key</Label>
-                  <div className="relative">
-                    <Input
-                      id="apiKey"
-                      type={showSecrets ? 'text' : 'password'}
-                      value={config.apiKey}
-                      onChange={(e) => setConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                      placeholder="Enter your Binance API Key"
-                      disabled={!isEditing}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-2 top-1/2 -translate-y-1/2"
-                      onClick={() => setShowSecrets(!showSecrets)}
-                    >
-                      {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="secretKey">Secret Key</Label>
-                  <Input
-                    id="secretKey"
-                    type={showSecrets ? 'text' : 'password'}
-                    value={config.secretKey}
-                    onChange={(e) => setConfig(prev => ({ ...prev, secretKey: e.target.value }))}
-                    placeholder="Enter your Binance Secret Key"
-                    disabled={!isEditing}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="testnet"
-                    checked={config.isTestnet}
-                    onChange={(e) => setConfig(prev => ({ ...prev, isTestnet: e.target.checked }))}
-                    disabled={!isEditing}
-                  />
-                  <Label htmlFor="testnet" className="text-sm">Use Testnet (Recommended for testing)</Label>
-                </div>
-
-                <div className="flex gap-2">
-                  {isEditing ? (
-                    <>
-                      <Button type="submit" disabled={connectionStatus === 'connecting'}>
-                        Save Configuration
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button type="button" onClick={() => setIsEditing(true)}>
-                        Edit Configuration
-                      </Button>
-                      {config.apiKey && (
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={testRealConnection}
-                          disabled={realConnectionTest}
-                        >
-                          {realConnectionTest ? 'Testing...' : 'Test Real Connection'}
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </form>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Real Connection Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {connectionStatus === 'connected' && config.isReallyConnected ? (
-                <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-800">Connected to Real Binance API</p>
-                    <p className="text-green-700">
-                      Your app is now using live data from Binance {config.isTestnet ? 'Testnet' : 'Live Trading'} API.
-                      All dashboard stats and orders are fetched directly from Binance.
-                    </p>
-                  </div>
-                </div>
-              ) : connectionStatus === 'error' ? (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-red-800">Binance API Connection Failed</p>
-                    <p className="text-red-700">
-                      This is likely due to CORS restrictions. To enable the connection, visit{' '}
-                      <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" rel="noopener noreferrer" className="underline">
-                        https://cors-anywhere.herokuapp.com/corsdemo
-                      </a>{' '}
-                      and click "Request temporary access to the demo server".
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-yellow-800">Not Connected to Binance</p>
-                    <p className="text-yellow-700">
-                      Configure your API credentials and test connection to use real Binance data.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <h4 className="font-medium">Current Data Source:</h4>
-                <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li>• Orders: {config.isReallyConnected ? 'Live Binance API' : 'Not Available'}</li>
-                  <li>• Account Data: {config.isReallyConnected ? 'Live Binance API' : 'Not Available'}</li>
-                  <li>• Trading Activity: {config.isReallyConnected ? 'Live Binance API' : 'Not Available'}</li>
-                  <li>• Network: {config.isTestnet ? 'Testnet' : 'Live Trading'}</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <h2 className="text-2xl font-bold">Binance API Configuration</h2>
+        <p className="text-muted-foreground">Configure your Binance API connection for live trading data</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Account Information</CardTitle>
-          <CardDescription>View your Binance account details and trading limits</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            {getStatusIcon()}
+            API Connection Status
+          </CardTitle>
+          <CardDescription>
+            Production-ready backend integration with Binance API
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {connectionStatus === 'connected' ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">Account Type</p>
-                <p className="font-medium">{config.isTestnet ? 'Testnet' : 'Live Trading'}</p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">Daily Limit</p>
-                <p className="font-medium">$50,000</p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">Used Today</p>
-                <p className="font-medium">$12,450</p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">Available</p>
-                <p className="font-medium">$37,550</p>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <h3 className="font-medium">{getStatusText()}</h3>
+              <p className="text-sm text-muted-foreground">
+                {isConnected 
+                  ? `Using ${isTestnet ? 'Testnet' : 'Mainnet'} environment via secure backend`
+                  : 'API credentials configured in backend environment'
+                }
+              </p>
+              {errorMessage && (
+                <p className="text-sm text-red-600 mt-1">{errorMessage}</p>
+              )}
+            </div>
+            <Badge variant={isConnected ? 'default' : 'secondary'}>
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="testnet-mode"
+                checked={isTestnet}
+                onCheckedChange={setIsTestnet}
+              />
+              <Label htmlFor="testnet-mode">Use Testnet Environment</Label>
+            </div>
+
+            <div className="bg-muted p-4 rounded-lg space-y-2">
+              <h4 className="font-medium text-sm">Backend Configuration Required:</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• BINANCE_API_KEY environment variable</li>
+                <li>• BINANCE_SECRET_KEY environment variable</li>
+                <li>• BINANCE_TESTNET=true/false environment variable</li>
+              </ul>
+            </div>
+
+            <Button 
+              onClick={testConnection} 
+              disabled={connectionStatus === 'testing'}
+              className="w-full"
+            >
+              {connectionStatus === 'testing' ? 'Testing Connection...' : 'Test Connection'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Production Setup</CardTitle>
+          <CardDescription>
+            Secure backend implementation for production use
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+              <div>
+                <h4 className="font-medium">Supabase Edge Function</h4>
+                <p className="text-sm text-muted-foreground">
+                  API calls are handled securely via backend Edge Function
+                </p>
               </div>
             </div>
-          ) : (
-            <p className="text-center text-muted-foreground py-8">
-              Connect your API to view account information
-            </p>
-          )}
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+              <div>
+                <h4 className="font-medium">Secure Credentials</h4>
+                <p className="text-sm text-muted-foreground">
+                  API keys stored securely in environment variables
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+              <div>
+                <h4 className="font-medium">CORS Compliant</h4>
+                <p className="text-sm text-muted-foreground">
+                  No browser CORS issues with backend proxy
+                </p>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 
 export interface DashboardStats {
@@ -16,42 +15,28 @@ export interface RecentActivity {
   status: 'success' | 'pending' | 'error';
 }
 
-// Real Binance API calls with CORS proxy
+// Production-ready Binance API calls via Supabase Edge Function
 const fetchDashboardStats = async (): Promise<DashboardStats> => {
-  console.log('Fetching dashboard stats from Binance...');
+  console.log('Fetching dashboard stats from Binance via Edge Function...');
   
-  const savedConfig = localStorage.getItem('baratcx_binance_config');
-  
-  if (!savedConfig) {
-    throw new Error('Binance API not configured');
-  }
-  
-  const config = JSON.parse(savedConfig);
-  
-  if (!config.apiKey || !config.secretKey || !config.isReallyConnected) {
-    throw new Error('Binance API not properly connected');
-  }
-
-  const baseUrl = config.isTestnet 
-    ? 'https://testnet.binance.vision/api/v3'
-    : 'https://api.binance.com/api/v3';
-
-  // Use CORS proxy
-  const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-
   try {
     // Fetch account info and 24hr ticker stats
     const [accountResponse, tickerResponse] = await Promise.all([
-      fetch(`${proxyUrl}${baseUrl}/account`, {
-        headers: { 
-          'X-MBX-APIKEY': config.apiKey,
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+      fetch('/functions/v1/binance-api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: '/account',
+          params: {}
+        })
       }),
-      fetch(`${proxyUrl}${baseUrl}/ticker/24hr`, {
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+      fetch('/functions/v1/binance-api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: '/ticker/24hr',
+          params: {}
+        })
       })
     ]);
 
@@ -77,7 +62,7 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
       totalVolume: Math.floor(totalVolume)
     };
     
-    console.log('Real dashboard stats from Binance:', stats);
+    console.log('Real dashboard stats from Binance via Edge Function:', stats);
     return stats;
     
   } catch (error) {
@@ -87,38 +72,21 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
 };
 
 const fetchRecentActivity = async (): Promise<RecentActivity[]> => {
-  console.log('Fetching recent activity from Binance...');
+  console.log('Fetching recent activity from Binance via Edge Function...');
   
-  const savedConfig = localStorage.getItem('baratcx_binance_config');
-  
-  if (!savedConfig) {
-    throw new Error('Binance API not configured');
-  }
-  
-  const config = JSON.parse(savedConfig);
-  
-  if (!config.apiKey || !config.secretKey || !config.isReallyConnected) {
-    throw new Error('Binance API not properly connected');
-  }
-
-  const baseUrl = config.isTestnet 
-    ? 'https://testnet.binance.vision/api/v3'
-    : 'https://api.binance.com/api/v3';
-
-  // Use CORS proxy
-  const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-
   try {
-    // Fetch recent trades
-    const response = await fetch(`${proxyUrl}${baseUrl}/myTrades?symbol=BTCUSDT&limit=5`, {
-      headers: { 
-        'X-MBX-APIKEY': config.apiKey,
-        'X-Requested-With': 'XMLHttpRequest'
-      }
+    const response = await fetch('/functions/v1/binance-api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: '/myTrades',
+        params: { symbol: 'BTCUSDT', limit: 5 }
+      })
     });
     
     if (!response.ok) {
-      throw new Error(`Binance API Error: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `API Error: ${response.status}`);
     }
     
     const trades = await response.json();
@@ -131,7 +99,7 @@ const fetchRecentActivity = async (): Promise<RecentActivity[]> => {
       status: 'success' as const
     }));
     
-    console.log('Real activity data from Binance:', activities);
+    console.log('Real activity data from Binance via Edge Function:', activities);
     return activities;
     
   } catch (error) {
