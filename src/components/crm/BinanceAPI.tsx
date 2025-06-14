@@ -49,14 +49,16 @@ const BinanceAPI = () => {
         throw new Error('API credentials required');
       }
 
-      // Test actual Binance API endpoint that requires authentication
       const baseUrl = config.isTestnet 
         ? 'https://testnet.binance.vision/api/v3'
         : 'https://api.binance.com/api/v3';
       
-      const response = await fetch(`${baseUrl}/account`, {
+      // Use CORS proxy for testing connection
+      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+      const response = await fetch(`${proxyUrl}${baseUrl}/account`, {
         headers: {
-          'X-MBX-APIKEY': config.apiKey
+          'X-MBX-APIKEY': config.apiKey,
+          'X-Requested-With': 'XMLHttpRequest'
         }
       });
       
@@ -68,7 +70,7 @@ const BinanceAPI = () => {
         
         toast({
           title: "Real Binance Connection Successful",
-          description: `Successfully connected to Binance ${config.isTestnet ? 'Testnet' : 'Live'} API with your credentials`,
+          description: `Successfully connected to Binance ${config.isTestnet ? 'Testnet' : 'Live'} API. The app is now using real data.`,
         });
       } else {
         throw new Error(`HTTP ${response.status} - Check your API credentials`);
@@ -82,7 +84,7 @@ const BinanceAPI = () => {
       
       toast({
         title: "Binance Connection Failed",
-        description: "Unable to authenticate with Binance API. Please check your credentials.",
+        description: "Unable to authenticate with Binance API. For CORS issues, you may need to enable the demo server at https://cors-anywhere.herokuapp.com/corsdemo",
         variant: "destructive"
       });
     } finally {
@@ -272,6 +274,7 @@ const BinanceAPI = () => {
                     <p className="font-medium text-green-800">Connected to Real Binance API</p>
                     <p className="text-green-700">
                       Your app is now using live data from Binance {config.isTestnet ? 'Testnet' : 'Live Trading'} API.
+                      All dashboard stats and orders are fetched directly from Binance.
                     </p>
                   </div>
                 </div>
@@ -281,7 +284,11 @@ const BinanceAPI = () => {
                   <div className="text-sm">
                     <p className="font-medium text-red-800">Binance API Connection Failed</p>
                     <p className="text-red-700">
-                      Check your API credentials and ensure they have proper permissions.
+                      This is likely due to CORS restrictions. To enable the connection, visit{' '}
+                      <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" rel="noopener noreferrer" className="underline">
+                        https://cors-anywhere.herokuapp.com/corsdemo
+                      </a>{' '}
+                      and click "Request temporary access to the demo server".
                     </p>
                   </div>
                 </div>

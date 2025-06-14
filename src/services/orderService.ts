@@ -1,3 +1,4 @@
+
 import { useQuery } from "@tanstack/react-query";
 
 export interface Order {
@@ -14,7 +15,7 @@ export interface Order {
   updatedAt: string;
 }
 
-// Real Binance API calls only
+// Real Binance API calls with CORS proxy
 const fetchOrdersFromAPI = async (): Promise<Order[]> => {
   console.log('Fetching orders from Binance API...');
   
@@ -35,11 +36,15 @@ const fetchOrdersFromAPI = async (): Promise<Order[]> => {
     ? 'https://testnet.binance.vision/api/v3'
     : 'https://api.binance.com/api/v3';
 
+  // Use CORS proxy to bypass browser restrictions
+  const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+  const fullUrl = `${proxyUrl}${baseUrl}/openOrders`;
+
   try {
-    // Fetch real orders from Binance
-    const response = await fetch(`${baseUrl}/openOrders`, {
+    const response = await fetch(fullUrl, {
       headers: {
-        'X-MBX-APIKEY': config.apiKey
+        'X-MBX-APIKEY': config.apiKey,
+        'X-Requested-With': 'XMLHttpRequest'
       }
     });
 
@@ -77,7 +82,7 @@ export const useOrders = () => {
   return useQuery({
     queryKey: ['orders'],
     queryFn: fetchOrdersFromAPI,
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
     retry: 1,
   });
 };

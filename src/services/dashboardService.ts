@@ -16,7 +16,7 @@ export interface RecentActivity {
   status: 'success' | 'pending' | 'error';
 }
 
-// Real Binance API calls only
+// Real Binance API calls with CORS proxy
 const fetchDashboardStats = async (): Promise<DashboardStats> => {
   console.log('Fetching dashboard stats from Binance...');
   
@@ -36,13 +36,23 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
     ? 'https://testnet.binance.vision/api/v3'
     : 'https://api.binance.com/api/v3';
 
+  // Use CORS proxy
+  const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+
   try {
     // Fetch account info and 24hr ticker stats
     const [accountResponse, tickerResponse] = await Promise.all([
-      fetch(`${baseUrl}/account`, {
-        headers: { 'X-MBX-APIKEY': config.apiKey }
+      fetch(`${proxyUrl}${baseUrl}/account`, {
+        headers: { 
+          'X-MBX-APIKEY': config.apiKey,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
       }),
-      fetch(`${baseUrl}/ticker/24hr`)
+      fetch(`${proxyUrl}${baseUrl}/ticker/24hr`, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
     ]);
 
     if (!accountResponse.ok || !tickerResponse.ok) {
@@ -56,13 +66,14 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
 
     // Calculate real stats from Binance data
     const totalVolume = tickerData.reduce((sum: number, ticker: any) => {
-      return sum + Number(ticker.volume || 0);
+      const volume = Number(ticker.volume) || 0;
+      return sum + volume;
     }, 0);
 
     const stats: DashboardStats = {
-      totalClients: accountData.balances?.length || 0,
-      activeOrders: accountData.totalOrders || 0,
-      completedTrades: accountData.totalTrades || 0,
+      totalClients: Number(accountData.balances?.length) || 0,
+      activeOrders: Number(accountData.totalOrders) || 0,
+      completedTrades: Number(accountData.totalTrades) || 0,
       totalVolume: Math.floor(totalVolume)
     };
     
@@ -94,10 +105,16 @@ const fetchRecentActivity = async (): Promise<RecentActivity[]> => {
     ? 'https://testnet.binance.vision/api/v3'
     : 'https://api.binance.com/api/v3';
 
+  // Use CORS proxy
+  const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+
   try {
     // Fetch recent trades
-    const response = await fetch(`${baseUrl}/myTrades?symbol=BTCUSDT&limit=5`, {
-      headers: { 'X-MBX-APIKEY': config.apiKey }
+    const response = await fetch(`${proxyUrl}${baseUrl}/myTrades?symbol=BTCUSDT&limit=5`, {
+      headers: { 
+        'X-MBX-APIKEY': config.apiKey,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
     });
     
     if (!response.ok) {
